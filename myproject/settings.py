@@ -27,6 +27,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework', # Подключаем Django REST Framework
     'api', # приложение 1
+    'users', # приложение 2
+    'materials', # приложение 3
 ]
 
 MIDDLEWARE = [
@@ -105,9 +107,6 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
-
-
 # Django REST Framework
 
 REST_FRAMEWORK = {
@@ -118,7 +117,21 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
 }
 
 
+# Кастомная модель пользователя
 
+AUTH_USER_MODEL = 'users.User'
+
+# Настройки для медиа-файлов (аватарки, превью)
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Настройки для статических файлов
+
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
