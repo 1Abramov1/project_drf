@@ -1,13 +1,14 @@
+Вот обновленный файл README.md с информацией о выполненных заданиях:
 # 📚 Educational Materials API
 
-Django REST Framework API для управления учебными курсами и материалами.
+Django REST Framework API для управления учебными курсами, уроками и платежами.
 
 ## 🚀 Быстрый старт
 
 ```bash
 # Клонировать репозиторий
 git clone <repo-url>
-cd <project>
+cd project_drf
 
 # Создать виртуальное окружение
 python -m venv venv
@@ -17,85 +18,136 @@ source venv/bin/activate   # Mac/Linux
 # Установить зависимости
 pip install -r requirements.txt
 
-# Настройка окружения
-cp .env.example .env
-# Отредактируйте .env файл
-
-# Миграции и суперпользователь
+# Применить миграции
 python manage.py migrate
+
+# Создать суперпользователя
 python manage.py createsuperuser
 
-# Запуск сервера
+# Запустить сервер
 python manage.py runserver
 
 📁 Структура проекта
-myproject/
+project_drf/
 ├── api/           # Основное API
-├── materials/     # Приложение материалов
-├── myproject/     # Настройки
+├── materials/     # Курсы и уроки
+├── users/         # Пользователи и платежи
+├── myproject/     # Настройки проекта
 ├── requirements.txt
-└── manage.py
+├── manage.py
+└── README.md
+
+✅ Выполненные задания
+
+Задание 1: Кастомная модель пользователя
+
+· Авторизация по email вместо username
+· Дополнительные поля: телефон, город, аватарка
+· Кастомный UserManager
+
+Задание 2: Модель платежей (Payment)
+
+· Связь с пользователем, курсом или уроком
+· Поля: дата оплаты, сумма, способ оплаты (наличные/перевод)
+· Фикстуры с тестовыми данными
+· Админ-панель для управления
+
+Задание 3: CRUD API
+
+· Курсы: ViewSet с полным CRUD
+· Уроки: Generic Views (ListCreateAPIView, RetrieveUpdateDestroyAPIView)
+· Сериализаторы: CourseSerializer с уроками и lesson_count
+· Все операции доступны через API
+
+Задание 4: Фильтрация платежей
+
+· Сортировка по дате оплаты (возрастание/убывание)
+· Фильтрация по курсу или уроку
+· Фильтрация по способу оплаты
+· Использование django-filter для расширенной фильтрации
 
 🔌 Основные API Endpoints
 
-Курсы
-GET    /api/materials/courses/     - Список курсов
-POST   /api/materials/courses/     - Создать курс
+Курсы (ViewSet)
+GET    /api/materials/courses/          - Список курсов
+POST   /api/materials/courses/          - Создать курс
+GET    /api/materials/courses/{id}/     - Получить курс
+PUT    /api/materials/courses/{id}/     - Обновить курс
+PATCH  /api/materials/courses/{id}/     - Частично обновить
+DELETE /api/materials/courses/{id}/     - Удалить курс
+GET    /api/materials/courses/{id}/lessons/ - Уроки курса
 
-Пример запроса (Postman):
+Уроки (Generic Views)
+GET    /api/materials/lessons/          - Список уроков
+POST   /api/materials/lessons/          - Создать урок
+GET    /api/materials/lessons/{id}/     - Получить урок
+PUT    /api/materials/lessons/{id}/     - Обновить урок
+DELETE /api/materials/lessons/{id}/     - Удалить урок
+
+Платежи (с фильтрацией)
+GET    /api/users/payments/             - Все платежи
+GET    /api/users/payments/?payment_method=cash      - Только наличные
+GET    /api/users/payments/?payment_method=transfer  - Только переводы
+GET    /api/users/payments/?paid_course=1            - За курс 1
+GET    /api/users/payments/?paid_lesson=1            - За урок 1
+GET    /api/users/payments/?ordering=payment_date    - По дате (старые)
+GET    /api/users/payments/?ordering=-payment_date   - По дате (новые)
+
+📝 Примеры запросов
+
+Создание курса (Postman)
 POST http://127.0.0.1:8000/api/materials/courses/
 Content-Type: application/json
 
 {
-  "title": "Новый курс",
-  "description": "Описание курса",
+  "title": "Django для начинающих",
+  "description": "Полный курс по Django и DRF",
+  "owner": 1
+}
+
+Создание урока
+POST http://127.0.0.1:8000/api/materials/lessons/
+Content-Type: application/json
+
+{
+  "title": "Введение в Django",
+  "description": "Основные концепции Django",
+  "course": 1,
+  "video_link": "https://youtube.com/watch?v=example",
   "owner": 1
 }
 
 🛠 Технологии
 
-· Django 4.2+
-· Django REST Framework
-· PostgreSQL/SQLite
-· JWT аутентификация
+· Django 4.2+ - веб-фреймворк
+· Django REST Framework - построение API
+· django-filter - фильтрация данных
+· SQLite - база данных (разработка)
+· Pillow - работа с изображениями
 
-📄 Лицензия
+⚙️ Настройки
 
-MIT
-
-**Ещё более минимальная версия:**
-
-```markdown
-# Educational Materials API
-
-Django REST API для учебных материалов.
-
-## Установка
-```bash
-git clone <repo>
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver
-
-API
-
-· GET/POST /api/materials/courses/ - Работа с курсами
-· GET/POST /api/materials/lessons/ - Работа с уроками
-
-Пример создания курса:
-POST /api/materials/courses/
-{
-  "title": "Название",
-  "description": "Описание",
-  "owner": 1
+Основные настройки в myproject/settings.py:
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.OrderingFilter',
+        'rest_framework.filters.SearchFilter',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
 }
 
-Технологии
+AUTH_USER_MODEL = 'users.User'
 
-· Django REST Framework
-· JWT аутентификация
+📦 Зависимости
+Django==4.2.0
+djangorestframework==3.14.0
+django-filter==23.3
+Pillow==10.0.0
 
 🤝 Вклад в проект
 
@@ -107,18 +159,16 @@ POST /api/materials/courses/
 
 📄 Лицензия
 
-Этот проект распространяется под лицензией MIT. Смотрите файл LICENSE для подробностей.
+Этот проект распространяется под лицензией MIT.
 
 👨‍💻 Автор
 
-Абрамов Алекcандр
-
-· GitHub: @1Abramov1
+Александр Абрамов
 
 🙏 Благодарности
 
-· Команда Bootstrap за отличный фреймворк
-· Сообщество Python за документацию и примеры
+· Команда Django за отличный фреймворк
+· Сообщество Django REST Framework
 · Все контрибьюторы проекта
 
 ---
