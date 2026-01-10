@@ -147,6 +147,21 @@ class Payment(models.Model):
         help_text=_('Способ осуществления платежа')
     )
 
+    # ДОБАВЬТЕ ЭТИ ПОЛЯ:
+    stripe_id = models.CharField(
+        _('ID платежа в Stripe'),
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_('Идентификатор платежа в платежной системе Stripe')
+    )
+
+    is_confirmed = models.BooleanField(
+        _('подтвержден'),
+        default=False,
+        help_text=_('Статус подтверждения платежа')
+    )
+
     class Meta:
         verbose_name = _('платеж')
         verbose_name_plural = _('платежи')

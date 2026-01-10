@@ -70,8 +70,18 @@ class Command(BaseCommand):
                 paid_course=paid_course,
                 paid_lesson=paid_lesson,
                 amount=amount,
-                payment_method=payment_method
+                payment_method=payment_method,  # ЗАПЯТАЯ ЗДЕСЬ ВАЖНА!
+                stripe_id=f'pi_{random.randint(100000, 999999)}' if payment_method == Payment.PaymentMethod.TRANSFER else None,
+                is_confirmed=random.choice([True, False])
             )
+
+            payments_created += 1
+
+            # Используем переменную payment, чтобы убрать warning
+            if payment.paid_course:
+                self.stdout.write(f'{i + 1}. {user.email} оплатил курс "{payment.paid_course.title}" на {amount} руб.')
+            else:
+                self.stdout.write(f'{i + 1}. {user.email} оплатил урок "{payment.paid_lesson.title}" на {amount} руб.')
 
             payments_created += 1
 
