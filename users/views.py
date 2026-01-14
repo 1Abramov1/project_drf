@@ -11,6 +11,9 @@ from .serializers import UserSerializer, UserRegistrationSerializer, PaymentSeri
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 
+from rest_framework.permissions import IsAuthenticated  # Явный импорт если нужно
+from users.permissions import IsOwnerOrModerator, IsOwner, IsNotModerator
+
 
 class UserRegistrationView(APIView):
     """Отдельный View для регистрации, полностью публичный"""
@@ -80,17 +83,22 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
 
     def get_permissions(self):
-        """Настройка прав доступа для разных действий"""
-        if self.action in ['create', 'registration', 'token', 'refresh', 'verify']:
-            # Эти действия доступны всем (регистрация и получение токена)
-            permission_classes = [permissions.AllowAny]
-        elif self.action in ['retrieve', 'update', 'partial_update', 'destroy', 'me', 'payments']:
-            # Работа с профилем и платежами требует авторизации
-            # Проверяем, что пользователь работает со своим профилем
-            permission_classes = [permissions.IsAuthenticated]
-        else:
-            # Список пользователей только для админов
-            permission_classes = [permissions.IsAdminUser]
+        if self.action == 'create':
+            # Создание: любой авторизованный, но НЕ модератор (по заданию)
+            permission_classes = [IsAuthenticated, IsNotModerator]
+        elif self.action == 'destroy':
+            # Удаление: только владелец И не модератор
+            permission_classes = [IsAuthenticated, IsNotModerator, IsOwner]
+        elif self.action in ['update', 'partial_update']:
+            # Обновление: (владелец И не модератор) ИЛИ модератор
+            permission_classes = [IsAuthenticated, IsOwnerOrModerator]
+        elif self.action == 'retrieve':
+            # Просмотр деталей: (владелец И не модератор) ИЛИ модератор
+            permission_classes = [IsAuthenticated, IsOwnerOrModerator]
+        else:  # list
+            # Просмотр списка: все авторизованные
+            permission_classes = [IsAuthenticated]
+
         return [permission() for permission in permission_classes]
 
 

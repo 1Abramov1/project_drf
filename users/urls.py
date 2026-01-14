@@ -21,4 +21,3 @@ urlpatterns = [
     # Router.urls В САМОМ КОНЦЕ
     path('', include(router.urls)),
 ]
-
