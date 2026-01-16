@@ -2,23 +2,68 @@ from rest_framework import viewsets, generics, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
+
 from .models import Course, Lesson
 from .serializers import CourseSerializer, LessonSerializer
+
+from rest_framework.permissions import IsAuthenticated  # Явный импорт если нужно
+from users.permissions import IsOwnerOrModerator, IsOwner, IsNotModerator
 
 
 class CourseViewSet(viewsets.ModelViewSet):
     """
     ViewSet для CRUD операций с курсами.
-    Использует ViewSet как указано в задании.
+    Права доступа:
+    - Создание: только авторизованные пользователи (становятся владельцами)
+    - Просмотр списка: все авторизованные
+    - Просмотр деталей: владелец или модератор
+    - Обновление: владелец или модератор
+    - Удаление: только владелец (НЕ модератор)
     """
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
-    permission_classes = [permissions.AllowAny]
+    # Убрали permission_classes по умолчанию, будем определять в get_permissions
 
-    @action(detail=True, methods=['get'])
+    def get_permissions(self):
+        if self.action == 'create':
+            # Создание: любой авторизованный, но НЕ модератор (по заданию)
+            permission_classes = [IsAuthenticated, IsNotModerator]
+        elif self.action == 'destroy':
+            # Удаление: только владелец И не модератор
+            permission_classes = [IsAuthenticated, IsNotModerator, IsOwner]
+        elif self.action in ['update', 'partial_update']:
+            # Обновление: (владелец И не модератор) ИЛИ модератор
+            permission_classes = [IsAuthenticated, IsOwnerOrModerator]
+        elif self.action == 'retrieve':
+            # Просмотр деталей: (владелец И не модератор) ИЛИ модератор
+            permission_classes = [IsAuthenticated, IsOwnerOrModerator]
+        else:  # list
+            # Просмотр списка: все авторизованные
+            permission_classes = [IsAuthenticated]
+
+        return [permission() for permission in permission_classes]
+
+    def get_queryset(self):
+        """Модераторы видят все курсы, обычные пользователи - только свои"""
+        user = self.request.user
+        # Проверяем, есть ли у пользователя доступ (аутентифицирован ли он)
+        if not user.is_authenticated:
+            return Course.objects.none()
+
+        if user.is_staff or user.is_superuser or user.groups.filter(name='moderators').exists():
+            # Администраторы и модераторы видят все курсы
+            return Course.objects.all()
+        else:
+            # Обычные пользователи видят только свои курсы
+            return Course.objects.filter(owner=user)
+
+    def perform_create(self, serializer):
+        """При создании курса автоматически устанавливаем текущего пользователя как владельца"""
+        serializer.save(owner=self.request.user)
+
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated, IsOwnerOrModerator])
     def lessons(self, request, pk=None):
         """Получить все уроки курса"""
-        # Получаем курс по pk
         course = get_object_or_404(Course, pk=pk)
         lessons = course.lessons.all()
         serializer = LessonSerializer(lessons, many=True)
@@ -28,18 +73,74 @@ class CourseViewSet(viewsets.ModelViewSet):
 class LessonListCreateView(generics.ListCreateAPIView):
     """
     Generic View для получения списка уроков и создания нового.
-    Использует Generic-классы как указано в задании.
+    Права доступа:
+    - Создание: только авторизованные пользователи
+    - Просмотр списка: все авторизованные (фильтруется по владельцу в get_queryset)
     """
-    queryset = Lesson.objects.all()
     serializer_class = LessonSerializer
-    permission_classes = [permissions.AllowAny]
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            # Создание урока: авторизованный И не модератор
+            return [IsAuthenticated(), IsNotModerator()]
+        else:  # GET
+            # Просмотр списка: авторизованные
+            return [IsAuthenticated()]
+
+    def get_queryset(self):
+        """Модераторы видят все уроки, обычные пользователи - только свои"""
+        user = self.request.user
+
+        # Проверяем, есть ли у пользователя доступ (аутентифицирован ли он)
+        if not user.is_authenticated:
+            return Lesson.objects.none()
+
+        if user.is_staff or user.is_superuser or user.groups.filter(name='moderators').exists():
+            # Администраторы и модераторы видят все уроки
+            return Lesson.objects.all()
+        else:
+            # Обычные пользователи видят только свои уроки
+            return Lesson.objects.filter(owner=user)
+
+    def perform_create(self, serializer):
+        """При создании урока автоматически устанавливаем текущего пользователя как владельца"""
+        serializer.save(owner=self.request.user)
 
 
 class LessonRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     """
     Generic View для получения, обновления и удаления урока.
-    Использует Generic-классы как указано в задании.
+    Права доступа:
+    - Просмотр: владелец или модератор
+    - Обновление: владелец или модератор
+    - Удаление: только владелец (НЕ модератор)
     """
     queryset = Lesson.objects.all()
     serializer_class = LessonSerializer
-    permission_classes = [permissions.AllowAny]
+
+    def get_permissions(self):
+        if self.request.method == 'DELETE':
+            # Удаление: авторизованный И не модератор И владелец
+            return [IsAuthenticated(), IsNotModerator(), IsOwner()]
+        elif self.request.method in ['PUT', 'PATCH']:
+            # Обновление: (владелец И не модератор) ИЛИ модератор
+            return [IsAuthenticated(), IsOwnerOrModerator()]
+        elif self.request.method == 'GET':
+            # Просмотр: (владелец И не модератор) ИЛИ модератор
+            return [IsAuthenticated(), IsOwnerOrModerator()]
+
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        """Ограничиваем queryset для не-модераторов"""
+        user = self.request.user
+
+        if not user.is_authenticated:
+            return Lesson.objects.none()
+
+        # Для GET запросов мы уже проверили права через permissions
+        # Но для безопасности все равно фильтруем
+        if user.is_staff or user.is_superuser or user.groups.filter(name='moderators').exists():
+            return Lesson.objects.all()
+        else:
+            return Lesson.objects.filter(owner=user)

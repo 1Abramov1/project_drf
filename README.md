@@ -1,41 +1,25 @@
-Вот обновленный файл README.md с информацией о выполненных заданиях:
-# 📚 Educational Materials API
-
 Django REST Framework API для управления учебными курсами, уроками и платежами.
 
 ## 🚀 Быстрый старт
 
 ```bash
-# Клонировать репозиторий
+# Установка и запуск
 git clone <repo-url>
 cd project_drf
-
-# Создать виртуальное окружение
 python -m venv venv
 venv\Scripts\activate      # Windows
 source venv/bin/activate   # Mac/Linux
 
-# Установить зависимости
 pip install -r requirements.txt
-
-# Применить миграции
 python manage.py migrate
-
-# Создать суперпользователя
 python manage.py createsuperuser
-
-# Запустить сервер
 python manage.py runserver
 
 📁 Структура проекта
-project_drf/
-├── api/           # Основное API
-├── materials/     # Курсы и уроки
-├── users/         # Пользователи и платежи
-├── myproject/     # Настройки проекта
-├── requirements.txt
-├── manage.py
-└── README.md
+
+· materials/ - Курсы и уроки
+· users/ - Пользователи, платежи, права доступа
+· myproject/ - Настройки проекта
 
 ✅ Выполненные задания
 
@@ -43,109 +27,69 @@ project_drf/
 
 · Авторизация по email вместо username
 · Дополнительные поля: телефон, город, аватарка
-· Кастомный UserManager
 
-Задание 2: Модель платежей (Payment)
+Задание 2-3: Система прав доступа
 
-· Связь с пользователем, курсом или уроком
-· Поля: дата оплаты, сумма, способ оплаты (наличные/перевод)
-· Фикстуры с тестовыми данными
-· Админ-панель для управления
-
-Задание 3: CRUD API
-
-· Курсы: ViewSet с полным CRUD
-· Уроки: Generic Views (ListCreateAPIView, RetrieveUpdateDestroyAPIView)
-· Сериализаторы: CourseSerializer с уроками и lesson_count
-· Все операции доступны через API
+· Модераторы: просматривают и редактируют всё, но не создают/удаляют
+· Обычные пользователи: работают только со своими объектами
+· Автоматическая привязка объекта к владельцу при создании
 
 Задание 4: Фильтрация платежей
 
-· Сортировка по дате оплаты (возрастание/убывание)
-· Фильтрация по курсу или уроку
-· Фильтрация по способу оплаты
-· Использование django-filter для расширенной фильтрации
+· Сортировка по дате оплаты
+· Фильтрация по курсу, уроку, способу оплаты
+· Использование django-filter
 
 🔌 Основные API Endpoints
 
-Курсы (ViewSet)
-GET    /api/materials/courses/          - Список курсов
-POST   /api/materials/courses/          - Создать курс
-GET    /api/materials/courses/{id}/     - Получить курс
-PUT    /api/materials/courses/{id}/     - Обновить курс
-PATCH  /api/materials/courses/{id}/     - Частично обновить
-DELETE /api/materials/courses/{id}/     - Удалить курс
+Курсы
+GET    /api/materials/courses/          - Список
+POST   /api/materials/courses/          - Создать
+GET    /api/materials/courses/{id}/     - Детали
+PUT    /api/materials/courses/{id}/     - Обновить
+DELETE /api/materials/courses/{id}/     - Удалить
 GET    /api/materials/courses/{id}/lessons/ - Уроки курса
 
-Уроки (Generic Views)
-GET    /api/materials/lessons/          - Список уроков
-POST   /api/materials/lessons/          - Создать урок
-GET    /api/materials/lessons/{id}/     - Получить урок
-PUT    /api/materials/lessons/{id}/     - Обновить урок
-DELETE /api/materials/lessons/{id}/     - Удалить урок
+Уроки
+GET    /api/materials/lessons/          - Список
+POST   /api/materials/lessons/          - Создать
+GET    /api/materials/lessons/{id}/     - Детали
+PUT    /api/materials/lessons/{id}/     - Обновить
+DELETE /api/materials/lessons/{id}/     - Удалить
 
-Платежи (с фильтрацией)
-GET    /api/users/payments/             - Все платежи
-GET    /api/users/payments/?payment_method=cash      - Только наличные
-GET    /api/users/payments/?payment_method=transfer  - Только переводы
-GET    /api/users/payments/?paid_course=1            - За курс 1
-GET    /api/users/payments/?paid_lesson=1            - За урок 1
-GET    /api/users/payments/?ordering=payment_date    - По дате (старые)
-GET    /api/users/payments/?ordering=-payment_date   - По дате (новые)
+Аутентификация
+POST   /api/users/token/                - Получить JWT-токен
+POST   /api/users/token/refresh/        - Обновить токен
 
-📝 Примеры запросов
+🔐 Права доступа по ролям
 
-Создание курса (Postman)
-POST http://127.0.0.1:8000/api/materials/courses/
-Content-Type: application/json
-
-{
-  "title": "Django для начинающих",
-  "description": "Полный курс по Django и DRF",
-  "owner": 1
-}
-
-Создание урока
-POST http://127.0.0.1:8000/api/materials/lessons/
-Content-Type: application/json
-
-{
-  "title": "Введение в Django",
-  "description": "Основные концепции Django",
-  "course": 1,
-  "video_link": "https://youtube.com/watch?v=example",
-  "owner": 1
-}
+Роль Создание Просмотр Редактирование Удаление
+Обычный пользователь Только свои Только свои Только свои Только свои
+Модератор ❌ Нет ✅ Все объекты ✅ Все объекты ❌ Нет
+Администратор ✅ Все ✅ Все ✅ Все ✅ Все
 
 🛠 Технологии
 
-· Django 4.2+ - веб-фреймворк
-· Django REST Framework - построение API
-· django-filter - фильтрация данных
-· SQLite - база данных (разработка)
-· Pillow - работа с изображениями
+· Django 4.2+ & Django REST Framework
+· JWT аутентификация
+· django-filter для фильтрации
+· SQLite (разработка)
 
-⚙️ Настройки
-
-Основные настройки в myproject/settings.py:
-REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ],
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.OrderingFilter',
-        'rest_framework.filters.SearchFilter',
-    ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
-}
-
+⚙️ Настройки в settings.py
 AUTH_USER_MODEL = 'users.User'
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ]
+}
 
 📦 Зависимости
 Django==4.2.0
 djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.0
 django-filter==23.3
 Pillow==10.0.0
 
