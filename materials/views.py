@@ -6,8 +6,14 @@ from django.shortcuts import get_object_or_404
 from .models import Course, Lesson
 from .serializers import CourseSerializer, LessonSerializer
 
-from rest_framework.permissions import IsAuthenticated  # Явный импорт если нужно
+from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsOwnerOrModerator, IsOwner, IsNotModerator
+
+from rest_framework.views import APIView
+
+from rest_framework import status
+from .models import Subscription
+from .serializers import SubscriptionSerializer
 
 
 class CourseViewSet(viewsets.ModelViewSet):
@@ -144,3 +150,69 @@ class LessonRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
             return Lesson.objects.all()
         else:
             return Lesson.objects.filter(owner=user)
+
+
+class SubscriptionAPIView(APIView):
+    """
+    API для управления подписками на курсы.
+    POST: Добавить/удалить подписку
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """
+        Добавить или удалить подписку пользователя на курс.
+        Ожидает в теле запроса: {"course_id": <id курса>}
+        """
+        user = request.user
+        course_id = request.data.get('course_id')
+
+        if not course_id:
+            return Response(
+                {"error": "Не указан course_id"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Получаем курс
+        course = get_object_or_404(Course, id=course_id)
+
+        # Проверяем существующую подписку
+        subscription = Subscription.objects.filter(
+            user=user,
+            course=course
+        ).first()
+
+        if subscription:
+            # Если подписка есть - удаляем
+            subscription.delete()
+            message = 'Подписка удалена'
+            subscribed = False
+        else:
+            # Если подписки нет - создаем
+            subscription = Subscription.objects.create(
+                user=user,
+                course=course
+            )
+            message = 'Подписка добавлена'
+            subscribed = True
+
+        return Response({
+            "message": message,
+            "subscribed": subscribed,
+            "course_id": course.id,
+            "course_title": course.title,
+            "user_email": user.email
+        })
+
+    def get(self, request, *args, **kwargs):
+        """
+        Получить список подписок текущего пользователя.
+        """
+        user = request.user
+        subscriptions = Subscription.objects.filter(user=user)
+        serializer = SubscriptionSerializer(subscriptions, many=True)
+
+        return Response({
+            "count": subscriptions.count(),
+            "results": serializer.data
+        })
