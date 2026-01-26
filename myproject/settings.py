@@ -1,5 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
+import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent  # Исправлено: было file -> __file__
@@ -30,6 +32,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'django_filters',
     'django_extensions',
+    'drf_yasg',
 
     # Приложения проекта
     'api',
@@ -146,3 +149,14 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
 }
+
+# Загружаем переменные окружения
+load_dotenv()
+
+# Stripe
+STRIPE_API_KEY = os.getenv('STRIPE_SECRET_KEY')
+STRIPE_PUBLISHABLE_KEY = os.getenv('STRIPE_PUBLISHABLE_KEY')
+
+# Проверка, что ключ загружен
+if not STRIPE_API_KEY:
+    raise ValueError("STRIPE_SECRET_KEY не найден в переменных окружения")

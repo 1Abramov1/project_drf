@@ -1,8 +1,6 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.conf import settings
-from django.core.exceptions import ValidationError
-
 
 class Course(models.Model):
     """Модель курса"""
@@ -26,6 +24,32 @@ class Course(models.Model):
         blank=True,
         null=True,
         help_text=_('Detailed course description')
+    )
+
+    # НОВОЕ ПОЛЕ: Цена курса
+    price = models.DecimalField(
+        _('price'),
+        max_digits=10,
+        decimal_places=2,
+        default=0.00,
+        help_text=_('Course price in USD')
+    )
+
+    # Stripe интеграция
+    stripe_product_id = models.CharField(
+        _('Stripe product ID'),
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_('Product ID in Stripe system')
+    )
+
+    stripe_price_id = models.CharField(
+        _('Stripe price ID'),
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text=_('Price ID in Stripe system')
     )
 
     created_at = models.DateTimeField(
@@ -52,7 +76,7 @@ class Course(models.Model):
         verbose_name_plural = _('courses')
         ordering = ['-created_at']
 
-    def __str__(self):  # ← ДВА подчеркивания с каждой стороны
+    def __str__(self):
         return self.title
 
     @property
@@ -125,23 +149,8 @@ class Lesson(models.Model):
         verbose_name_plural = _('lessons')
         ordering = ['created_at']
 
-    def __str__(self):  # ← ДВА подчеркивания с каждой стороны
+    def __str__(self):
         return f"{self.title} ({self.course.title})"
-
-    def clean(self):
-        """Валидация на уровне модели для проверки YouTube ссылок"""
-        from .validators import validate_youtube_url
-
-        # Проверяем ссылку на видео, если она указана
-        if self.video_link:
-            validate_youtube_url(self.video_link)
-
-        super().clean()
-
-    def save(self, *args, **kwargs):
-        """Вызываем clean() перед сохранением"""
-        self.clean()
-        super().save(*args, **kwargs)
 
 
 class Subscription(models.Model):
@@ -156,7 +165,7 @@ class Subscription(models.Model):
     )
 
     course = models.ForeignKey(
-        'Course',
+        Course,
         on_delete=models.CASCADE,
         related_name='subscriptions',
         verbose_name=_('course')
@@ -175,3 +184,4 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.user.email} → {self.course.title}"
+
