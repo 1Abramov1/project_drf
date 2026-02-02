@@ -1,7 +1,9 @@
+import logging
 from rest_framework import viewsets, generics, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
+
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from .models import Course, Lesson
@@ -23,6 +25,9 @@ from rest_framework.decorators import api_view, permission_classes
 from django.conf import settings
 import stripe
 
+from .services import CourseUpdateService, SubscriptionService
+
+logger = logging.getLogger(__name__)
 
 
 class CourseViewSet(viewsets.ModelViewSet):
@@ -212,6 +217,222 @@ class CourseViewSet(viewsets.ModelViewSet):
         serializer = LessonSerializer(lessons, many=True)
         return Response(serializer.data)
 
+    @swagger_auto_schema(
+        operation_summary="Подписаться на обновления курса",
+        operation_description="""
+                Подписаться на получение уведомлений об обновлениях курса.
+
+                После подписки вы будете получать email при любых изменениях курса.
+                """,
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={},
+            required=[]
+        ),
+        responses={
+            200: openapi.Response(
+                description="Успешная подписка",
+                examples={
+                    "application/json": {
+                        "status": "subscribed",
+                        "message": "Вы успешно подписались на обновления курса",
+                        "subscription_id": 1,
+                        "created": True
+                    }
+                }
+            ),
+            401: "Пользователь не аутентифицирован",
+            403: "Нет прав для подписки на этот курс"
+        }
+    )
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def subscribe(self, request, pk=None):
+        """
+        Подписка на обновления курса
+        """
+        course = self.get_object()
+        user = request.user
+
+        # Проверяем права доступа
+        is_allowed = (
+                user == course.owner or
+                user.is_staff or
+                user.is_superuser or
+                user.groups.filter(name='moderators').exists()
+        )
+
+        if not is_allowed:
+            return Response(
+                {"error": "У вас нет прав для подписки на этот курс"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Используем сервис для подписки
+        from .services import SubscriptionService
+        result = SubscriptionService.subscribe_user_to_course(user, course)
+
+        return Response({
+            'status': 'subscribed',
+            'message': result['message'],
+            'subscription_id': result['subscription'].id,
+            'created': result['created']
+        }, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        operation_summary="Отписаться от обновлений курса",
+        operation_description="""
+                Отписаться от получения уведомлений об обновлениях курса.
+                """,
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={},
+            required=[]
+        ),
+        responses={
+            200: openapi.Response(
+                description="Успешная отписка",
+                examples={
+                    "application/json": {
+                        "status": "unsubscribed",
+                        "message": "Вы отписались от обновлений курса"
+                    }
+                }
+            ),
+            401: "Пользователь не аутентифицирован",
+            404: "Подписка не найдена"
+        }
+    )
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def unsubscribe(self, request, pk=None):
+        """
+        Отписка от обновлений курса
+        """
+        course = self.get_object()
+        user = request.user
+
+        from .services import SubscriptionService
+        result = SubscriptionService.unsubscribe_user_from_course(user, course)
+
+        if result:
+            return Response({
+                'status': 'unsubscribed',
+                'message': result['message']
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            'error': 'Подписка не найдена'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    @swagger_auto_schema(
+        operation_summary="Получить список подписчиков курса",
+        operation_description="""
+                Получить список пользователей, подписанных на обновления курса.
+                Доступно только для владельца курса или администратора.
+                """,
+        responses={
+            200: openapi.Response(
+                description="Список подписчиков",
+                examples={
+                    "application/json": {
+                        "course": {"id": 1, "name": "Python"},
+                        "total_subscribers": 3,
+                        "subscribers": []
+                    }
+                }
+            ),
+            401: "Пользователь не аутентифицирован",
+            403: "У вас нет прав для просмотра подписчиков"
+        }
+    )
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def subscribers(self, request, pk=None):
+        """
+        Список подписчиков курса
+        """
+        course = self.get_object()
+
+        try:
+            from .services import SubscriptionService
+            subscribers_data = SubscriptionService.get_course_subscribers(
+                course=course,
+                user=request.user
+            )
+            return Response(subscribers_data)
+
+        except PermissionError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        except Exception as e:
+            logger.error(f"Ошибка получения подписчиков: {e}")
+            return Response(
+                {'error': 'Внутренняя ошибка сервера'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @swagger_auto_schema(
+        operation_summary="Тестовая отправка уведомления",
+        operation_description="""
+                Тестовая отправка уведомления об обновлении курса.
+
+                Доступно только для администраторов.
+                """,
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                "message": openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description="Текст тестового сообщения"
+                )
+            },
+            required=[]
+        ),
+        responses={
+            200: openapi.Response(
+                description="Уведомление поставлено в очередь",
+                examples={
+                    "application/json": {
+                        "status": "test_notification_sent",
+                        "message": "Тестовое уведомление поставлено в очередь"
+                    }
+                }
+            ),
+            401: "Пользователь не аутентифицирован",
+            403: "Только администраторы могут тестировать уведомления"
+        }
+    )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def test_notification(self, request, pk=None):
+        """
+        Тестовая отправка уведомления (для администраторов)
+        """
+        course = self.get_object()
+
+        # Проверяем права (только администраторы)
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response(
+                {'error': 'Только администраторы могут тестировать уведомления'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Получаем сообщение из запроса или используем по умолчанию
+        test_message = request.data.get('message', 'Тестовое обновление курса')
+
+        # Используем сервис для отправки тестового уведомления
+        from .services import CourseUpdateService
+        CourseUpdateService.send_update_notifications(
+            course_id=course.id,
+            update_description=test_message
+        )
+
+        return Response({
+            'status': 'test_notification_sent',
+            'message': f'Тестовое уведомление для курса "{course.name}" поставлено в очередь'
+        })
+
     def get_queryset(self):
         """Модераторы видят все курсы, обычные пользователи - только свои"""
         user = self.request.user
@@ -229,6 +450,33 @@ class CourseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """При создании курса автоматически устанавливаем текущего пользователя как владельца"""
         serializer.save(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        """
+        Переопределяем метод обновления для отправки email подписчикам
+        """
+        # Сохраняем старые данные курса
+        instance = serializer.instance
+        old_data = CourseSerializer(instance).data
+
+        # Выполняем обновление
+        super().perform_update(serializer)
+
+        # Получаем обновленные данные
+        updated_instance = serializer.instance
+        new_data = CourseSerializer(updated_instance).data
+
+        # Определяем изменения
+        from .services import CourseUpdateService  # Локальный импорт
+        changes = CourseUpdateService.get_course_changes(old_data, new_data)
+
+        # Если есть изменения, отправляем email подписчикам асинхронно
+        if changes:
+            CourseUpdateService.send_update_notifications(
+                course_id=updated_instance.id,
+                update_description=changes
+            )
+            logger.info(f"Уведомления об обновлении курса {updated_instance.id} поставлены в очередь")
 
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated, IsOwnerOrModerator])
     def lessons(self, request, pk=None):
@@ -422,6 +670,63 @@ class LessonRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
             return [IsAuthenticated(), IsOwnerOrModerator()]
 
         return [IsAuthenticated()]
+
+    def perform_update(self, serializer):
+        """
+        Обновление урока - отправляем уведомление если урок относится к курсу
+        """
+        # Сохраняем старые данные урока
+        instance = serializer.instance
+        old_data = LessonSerializer(instance).data
+
+        # Проверяем, есть ли связанный курс
+        course = instance.course
+
+        # Выполняем обновление
+        super().perform_update(serializer)
+
+        # Получаем обновленные данные
+        updated_instance = serializer.instance
+        new_data = LessonSerializer(updated_instance).data
+
+        # Если урок относится к курсу и есть изменения
+        if course:
+            # Определяем изменения в уроке
+            changes = []
+
+            for field in ['title', 'description', 'content', 'video_url']:
+                old_val = old_data.get(field)
+                new_val = new_data.get(field)
+
+                if old_val != new_val:
+                    if field == 'title':
+                        changes.append(f"Изменено название урока: '{old_val}' → '{new_val}'")
+
+                    elif field == 'description':
+                        old_desc = str(old_val or '')[:50]
+                        new_desc = str(new_val or '')[:50]
+
+                        if len(str(old_val or '')) > 50:
+                            old_desc += "..."
+                        if len(str(new_val or '')) > 50:
+                            new_desc += "..."
+
+                        changes.append(f"Обновлено описание урока: '{old_desc}' → '{new_desc}'")
+
+                    else:
+                        changes.append(f"Обновлен {field}")
+
+            # Если есть изменения в уроке, отправляем уведомление о курсе
+            if changes:
+                from .services import CourseUpdateService
+                update_description = f"Обновлен урок '{updated_instance.title}':\n" + "\n".join(changes)
+
+                CourseUpdateService.send_update_notifications(
+                    course_id=course.id,
+                    update_description=update_description
+                )
+
+                logger.info(f"Уведомление об обновлении урока {updated_instance.id} поставлено в очередь")
 
     def get_queryset(self):
         """Ограничиваем queryset для не-модераторов"""
