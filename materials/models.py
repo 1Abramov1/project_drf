@@ -171,6 +171,12 @@ class Subscription(models.Model):
         verbose_name=_('course')
     )
 
+    is_active = models.BooleanField(
+        _('active'),
+        default=True,
+        help_text=_('Is subscription active?')
+    )
+
     created_at = models.DateTimeField(
         _('created at'),
         auto_now_add=True
@@ -183,5 +189,5 @@ class Subscription(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.user.email} → {self.course.title}"
-
+        status = "✓" if self.is_active else "✗"
+        return f"{self.user.email} → {self.course.title} [{status}]"
